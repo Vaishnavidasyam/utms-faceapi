@@ -1,39 +1,34 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import cv2
+import face_recognition
 import numpy as np
 import os
-import insightface
 from PIL import Image
-import base64
 import io
 import pickle
+import time
 
 app = Flask(__name__)
 CORS(app)
 
-# Initialize model
-model = insightface.app.FaceAnalysis()
-model.prepare(ctx_id=0, det_size=(640, 640))
-
-# Folder to store face embeddings
 DATA_DIR = "embeddings"
 os.makedirs(DATA_DIR, exist_ok=True)
 
-# Function to compute face embedding
 def get_embedding(image_bytes):
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    img = np.array(img)
-    faces = model.get(img)
-    if len(faces) == 0:
+    arr = np.array(img)
+    boxes = face_recognition.face_locations(arr)
+    if not boxes:
         return None
-    return faces[0].embedding
+    encodings = face_recognition.face_encodings(arr, boxes)
+    if not encodings:
+        return None
+    return encodings[0]
 
 @app.route('/')
 def home():
     return jsonify({"message": "Face Recognition API Running"}), 200
 
-# ---------- ENROLL NEW STUDENT ----------
 @app.route('/enroll', methods=['POST'])
 def enroll():
     name = request.form['name']
@@ -50,7 +45,6 @@ def enroll():
 
     return jsonify({"message": f"{name} enrolled successfully"}), 200
 
-# ---------- RECOGNIZE STUDENTS ----------
 @app.route('/recognize', methods=['POST'])
 def recognize():
     file = request.files['photo']
@@ -59,7 +53,6 @@ def recognize():
         return jsonify({"error": "No face detected"}), 400
 
     recognized_students = []
-
     for filename in os.listdir(DATA_DIR):
         with open(os.path.join(DATA_DIR, filename), 'rb') as f:
             data = pickle.load(f)
@@ -67,7 +60,7 @@ def recognize():
             sim = np.dot(query_embedding, enrolled_embedding) / (
                 np.linalg.norm(query_embedding) * np.linalg.norm(enrolled_embedding)
             )
-            if sim > 0.45:  # similarity threshold
+            if sim > 0.45:
                 recognized_students.append(data['rollnumber'])
 
     return jsonify({"recognized": recognized_students}), 200
