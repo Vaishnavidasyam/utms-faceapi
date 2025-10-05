@@ -5,3 +5,5 @@ opencv-python
 insightface
 pillow
 requests
+onnxruntime
+opencv-python-headless
