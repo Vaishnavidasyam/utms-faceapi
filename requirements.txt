@@ -2,8 +2,5 @@ flask
 flask-cors
 numpy
 opencv-python
-insightface
+face_recognition
 pillow
-requests
-onnxruntime
-opencv-python-headless
