@@ -1,12 +1,11 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import face_recognition
+from deepface import DeepFace
 import numpy as np
 import os
 from PIL import Image
 import io
 import pickle
-import time
 
 app = Flask(__name__)
 CORS(app)
@@ -16,18 +15,18 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 def get_embedding(image_bytes):
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    arr = np.array(img)
-    boxes = face_recognition.face_locations(arr)
-    if not boxes:
+    path = "temp.jpg"
+    img.save(path)
+    try:
+        embedding = DeepFace.represent(img_path=path, model_name="Facenet")[0]['embedding']
+        return np.array(embedding)
+    except Exception as e:
+        print("Embedding error:", e)
         return None
-    encodings = face_recognition.face_encodings(arr, boxes)
-    if not encodings:
-        return None
-    return encodings[0]
 
 @app.route('/')
 def home():
-    return jsonify({"message": "Face Recognition API Running"}), 200
+    return jsonify({"message": "UTMS Face API Running"}), 200
 
 @app.route('/enroll', methods=['POST'])
 def enroll():
@@ -52,18 +51,17 @@ def recognize():
     if query_embedding is None:
         return jsonify({"error": "No face detected"}), 400
 
-    recognized_students = []
+    recognized = []
     for filename in os.listdir(DATA_DIR):
         with open(os.path.join(DATA_DIR, filename), 'rb') as f:
             data = pickle.load(f)
-            enrolled_embedding = data['embedding']
-            sim = np.dot(query_embedding, enrolled_embedding) / (
-                np.linalg.norm(query_embedding) * np.linalg.norm(enrolled_embedding)
+            sim = np.dot(query_embedding, data['embedding']) / (
+                np.linalg.norm(query_embedding) * np.linalg.norm(data['embedding'])
             )
-            if sim > 0.45:
-                recognized_students.append(data['rollnumber'])
+            if sim > 0.5:
+                recognized.append(data['rollnumber'])
 
-    return jsonify({"recognized": recognized_students}), 200
+    return jsonify({"recognized": recognized}), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
