@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from deepface import DeepFace
+import face_recognition
 import numpy as np
 import os
 from PIL import Image
@@ -15,18 +15,18 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 def get_embedding(image_bytes):
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    path = "temp.jpg"
-    img.save(path)
-    try:
-        embedding = DeepFace.represent(img_path=path, model_name="Facenet")[0]['embedding']
-        return np.array(embedding)
-    except Exception as e:
-        print("Embedding error:", e)
+    arr = np.array(img)
+    boxes = face_recognition.face_locations(arr)
+    if not boxes:
         return None
+    encodings = face_recognition.face_encodings(arr, boxes)
+    if not encodings:
+        return None
+    return encodings[0]
 
 @app.route('/')
 def home():
-    return jsonify({"message": "UTMS Face API Running"}), 200
+    return jsonify({"message": "UTMS Face Recognition API Running"}), 200
 
 @app.route('/enroll', methods=['POST'])
 def enroll():
@@ -58,7 +58,7 @@ def recognize():
             sim = np.dot(query_embedding, data['embedding']) / (
                 np.linalg.norm(query_embedding) * np.linalg.norm(data['embedding'])
             )
-            if sim > 0.5:
+            if sim > 0.45:
                 recognized.append(data['rollnumber'])
 
     return jsonify({"recognized": recognized}), 200
